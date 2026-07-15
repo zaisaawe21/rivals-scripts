@@ -29,6 +29,7 @@ local Window = pasted:CreateWindow({
         Enabled = false,
     },
     KeySystem = false,
+    ToggleUIKeybind = Enum.KeyCode.RightShift,
 })
 
 -- ============================================================

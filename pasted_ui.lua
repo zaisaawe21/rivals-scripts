@@ -121,7 +121,7 @@ local ConfigurationExtension = ".rfld"
 local settingsTable = {
 	General = {
 		-- if needs be in order just make getSetting(name)
-		pastedOpen = {Type = 'bind', Value = 'K', Name = 'pasted Keybind'},
+		pastedOpen = {Type = 'bind', Value = 'RightShift', Name = 'pasted Keybind'},
 		-- buildwarnings
 		-- pastedprompts
 
@@ -205,7 +205,7 @@ local function loadSettings()
 		-- for debug in studio
 		if useStudio then
 			file = [[
-	{"General":{"pastedOpen":{"Value":"K","Type":"bind","Name":"pasted Keybind","Element":{"HoldToInteract":false,"Ext":true,"Name":"pasted Keybind","Set":null,"CallOnChange":true,"Callback":null,"CurrentKeybind":"K"}}},"System":{"usageAnalytics":{"Value":false,"Type":"toggle","Name":"Anonymised Analytics","Element":{"Ext":true,"Name":"Anonymised Analytics","Set":null,"CurrentValue":false,"Callback":null}}}}
+	{"General":{"pastedOpen":{"Value":"RightShift","Type":"bind","Name":"pasted Keybind","Element":{"HoldToInteract":false,"Ext":true,"Name":"pasted Keybind","Set":null,"CallOnChange":true,"Callback":null,"CurrentKeybind":"K"}}},"System":{"usageAnalytics":{"Value":false,"Type":"toggle","Name":"Anonymised Analytics","Element":{"Ext":true,"Name":"Anonymised Analytics","Set":null,"CurrentValue":false,"Callback":null}}}}
 ]]
 		end
 
