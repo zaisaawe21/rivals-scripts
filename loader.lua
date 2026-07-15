@@ -1,4 +1,6 @@
 -- Loader for newrivals2.lua
--- Your executor loads this tiny file, which fetches the full script from GitHub CDN
+-- Paste this one line into your executor autoexec:
+-- loadstring(game:HttpGet("https://raw.githubusercontent.com/zaisaawe21/rivals-scripts/main/loader.lua"))()
 local scriptUrl = "https://raw.githubusercontent.com/zaisaawe21/rivals-scripts/main/newrivals2.lua"
-loadstring(game:HttpGet(scriptUrl))()
+local success, err = pcall(function() loadstring(game:HttpGet(scriptUrl))() end)
+if not success then warn("[rivals-loader] Failed: " .. tostring(err)) end
