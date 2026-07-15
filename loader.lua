@@ -7,13 +7,13 @@
 local GAMES = {
     {
         name = "Rivals Script",
-        url = "https://raw.githubusercontent.com/zaisaawe21/rivals-scripts/main/newrivals2.lua",
+        url = "https://cdn.jsdelivr.net/gh/zaisaawe21/rivals-scripts@main/newrivals2.lua",
         color = Color3.fromRGB(255, 80, 80),
         desc = "Full UI · Skin Changer · Aimbot · ESP · Movement",
     },
     {
         name = "Aba Script",
-        url = "https://raw.githubusercontent.com/zaisaawe21/rivals-scripts/main/aba3.lua",
+        url = "https://cdn.jsdelivr.net/gh/zaisaawe21/rivals-scripts@main/aba3.lua",
         color = Color3.fromRGB(80, 180, 255),
         desc = "ABA · Arena · Combat",
     },
