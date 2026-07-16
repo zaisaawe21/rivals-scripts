@@ -113,15 +113,45 @@ local function triggerDesyncSlide(hrp, intensity)
     if not hrp then return end
     pcall(function()
         if hrp:FindFirstChild("LagDesync") then return end
+
+        -- Find direction AWAY from nearest enemy
+        local myPos = hrp.Position
+        local myTeam = plr.Team
+        local live = workspace:FindFirstChild("Live")
+        local nearestEnemy, nearestDist = nil, math.huge
+        if live then
+            for _, c in ipairs(live:GetChildren()) do
+                local cp = game.Players:GetPlayerFromCharacter(c)
+                if cp and cp ~= plr and (not myTeam or cp.Team ~= myTeam) then
+                    local ehrp = c:FindFirstChild("HumanoidRootPart")
+                    if ehrp then
+                        local d = (ehrp.Position - myPos).Magnitude
+                        if d < nearestDist then nearestDist = d; nearestEnemy = ehrp end
+                    end
+                end
+            end
+        end
+
+        -- Push AWAY from nearest enemy (or backward if no enemy found)
+        local awayDir
+        if nearestEnemy then
+            awayDir = (myPos - nearestEnemy.Position) * Vector3.new(1, 0, 1)
+            if awayDir.Magnitude < 0.1 then awayDir = hrp.CFrame.LookVector end
+            awayDir = awayDir.Unit
+        else
+            awayDir = -hrp.CFrame.LookVector
+        end
+
+        -- Add slight diagonal randomness so it doesn't look perfectly scripted
+        local sideJitter = hrp.CFrame.RightVector * (math.random(-4, 4) / 10)
+        awayDir = (awayDir + sideJitter).Unit
+
         local bp = Instance.new("BodyVelocity")
-        bp.Name = "LagDesync"; bp.MaxForce = Vector3.new(100000, 0, 100000)
-        local backDir = -hrp.CFrame.LookVector
-        local sideDir = hrp.CFrame.RightVector * (math.random() > 0.5 and 1 or -1)
-        local slideDist = intensity == 1 and 0.3 or (intensity == 2 and 0.6 or 1.0)
-        bp.Velocity = (backDir * 0.4 + sideDir * slideDist).Unit * (14 + intensity * 4)
+        bp.Name = "LagDesync"; bp.MaxForce = Vector3.new(500000, 0, 500000)
+        bp.Velocity = awayDir * (18 + intensity * 5)  -- faster, further away
         bp.Parent = hrp
         task.spawn(function()
-            task.wait(0.08 + intensity * 0.04)
+            task.wait(0.10 + intensity * 0.06)
             pcall(function() bp:Destroy() end)
         end)
     end)
@@ -153,10 +183,38 @@ local function hitboxDodge(hrp)
     local now = os.clock()
     if now - lastHitboxDodge < 0.3 then return end
     lastHitboxDodge = now
-    local sideDir = hrp.CFrame.RightVector * (math.random() > 0.5 and 0.6 or -0.6)
+
+    -- Dodge AWAY from nearest enemy
+    local myPos = hrp.Position
+    local myTeam = plr.Team
+    local live = workspace:FindFirstChild("Live")
+    local nearestEnemy = nil
+    if live then
+        local nearestDist = math.huge
+        for _, c in ipairs(live:GetChildren()) do
+            local cp = game.Players:GetPlayerFromCharacter(c)
+            if cp and cp ~= plr and (not myTeam or cp.Team ~= myTeam) then
+                local ehrp = c:FindFirstChild("HumanoidRootPart")
+                if ehrp then
+                    local d = (ehrp.Position - myPos).Magnitude
+                    if d < nearestDist then nearestDist = d; nearestEnemy = ehrp end
+                end
+            end
+        end
+    end
+
+    local dodgeDir
+    if nearestEnemy then
+        dodgeDir = ((myPos - nearestEnemy.Position) * Vector3.new(1,0,1)).Unit
+    else
+        dodgeDir = hrp.CFrame.RightVector * (math.random() > 0.5 and 1 or -1)
+    end
+    -- Add slight random jitter
+    dodgeDir = (dodgeDir + Vector3.new(math.random(-2,2)/10, 0, math.random(-2,2)/10)).Unit
+
     local original = hrp.CFrame
-    hrp.CFrame = hrp.CFrame + sideDir
-    task.delay(0.12, function() if hrp and hrp.Parent then pcall(function() hrp.CFrame = original end) end end)
+    hrp.CFrame = hrp.CFrame + dodgeDir * 1.2  -- further nudge away
+    task.delay(0.15, function() if hrp and hrp.Parent then pcall(function() hrp.CFrame = original end) end end)
 end
 
 -- ============================================================
