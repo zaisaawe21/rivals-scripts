@@ -107,84 +107,22 @@ local function isMoveAnimationPlaying()
 end
 
 -- ============================================================
--- COMBO ESCAPE SLIDE
+-- COMBO ESCAPE (rewritten)
+-- Strategy: ABA is server-authoritative on movement. BodyVelocity slides
+-- and CFrame dodges get rubberbanded. What DOES work on ABA:
+-- 1) Speed boost + jump input breaks momentum-based combos
+-- 2) Dash/Lunge-style movement via Humanoid:Move() simulates real input
+-- 3) WalkSpeed spike + direction change creates real escape momentum
 -- ============================================================
-local function triggerDesyncSlide(hrp, intensity)
-    if not hrp then return end
-    pcall(function()
-        if hrp:FindFirstChild("LagDesync") then return end
-
-        -- Find direction AWAY from nearest enemy
-        local myPos = hrp.Position
-        local myTeam = plr.Team
-        local live = workspace:FindFirstChild("Live")
-        local nearestEnemy, nearestDist = nil, math.huge
-        if live then
-            for _, c in ipairs(live:GetChildren()) do
-                local cp = game.Players:GetPlayerFromCharacter(c)
-                if cp and cp ~= plr and (not myTeam or cp.Team ~= myTeam) then
-                    local ehrp = c:FindFirstChild("HumanoidRootPart")
-                    if ehrp then
-                        local d = (ehrp.Position - myPos).Magnitude
-                        if d < nearestDist then nearestDist = d; nearestEnemy = ehrp end
-                    end
-                end
-            end
-        end
-
-        -- Push AWAY from nearest enemy (or backward if no enemy found)
-        local awayDir
-        if nearestEnemy then
-            awayDir = (myPos - nearestEnemy.Position) * Vector3.new(1, 0, 1)
-            if awayDir.Magnitude < 0.1 then awayDir = hrp.CFrame.LookVector end
-            awayDir = awayDir.Unit
-        else
-            awayDir = -hrp.CFrame.LookVector
-        end
-
-        -- Add slight diagonal randomness so it doesn't look perfectly scripted
-        local sideJitter = hrp.CFrame.RightVector * (math.random(-4, 4) / 10)
-        awayDir = (awayDir + sideJitter).Unit
-
-        local bp = Instance.new("BodyVelocity")
-        bp.Name = "LagDesync"; bp.MaxForce = Vector3.new(500000, 0, 500000)
-        bp.Velocity = awayDir * (18 + intensity * 5)  -- faster, further away
-        bp.Parent = hrp
-        task.spawn(function()
-            task.wait(0.10 + intensity * 0.06)
-            pcall(function() bp:Destroy() end)
-        end)
-    end)
-end
-
--- ============================================================
--- AUTO BLOCK
--- ============================================================
-local lastAutoBlock = 0
-local function autoBlock()
-    if not _G.abaAutoBlockEnabled then return end
+local lastComboEscape = 0
+local function triggerComboEscape(hrp, hum)
+    if not _G.abaComboEscapeEnabled then return end
+    if not hrp or not hum then return end
     local now = os.clock()
-    if now - lastAutoBlock < 0.5 then return end
-    lastAutoBlock = now
-    pcall(function()
-        VIM:SendKeyEvent(true, Enum.KeyCode.F, false, nil)
-        task.wait(0.05)
-        VIM:SendKeyEvent(false, Enum.KeyCode.F, false, nil)
-    end)
-end
+    if now - lastComboEscape < 0.8 then return end
+    lastComboEscape = now
 
--- ============================================================
--- HITBOX DODGE
--- ============================================================
-local lastHitboxDodge = 0
-local function hitboxDodge(hrp)
-    if not _G.abaHitboxDodgeEnabled then return end
-    if not hrp then return end
-    local now = os.clock()
-    if now - lastHitboxDodge < 0.3 then return end
-    lastHitboxDodge = now
-
-    -- Dodge AWAY from nearest enemy
+    -- Find nearest enemy to escape from
     local myPos = hrp.Position
     local myTeam = plr.Team
     local live = workspace:FindFirstChild("Live")
@@ -203,18 +141,81 @@ local function hitboxDodge(hrp)
         end
     end
 
-    local dodgeDir
+    -- Escape direction: away from nearest enemy
+    local awayDir
     if nearestEnemy then
-        dodgeDir = ((myPos - nearestEnemy.Position) * Vector3.new(1,0,1)).Unit
+        awayDir = ((myPos - nearestEnemy.Position) * Vector3.new(1, 0, 1)).Unit
     else
-        dodgeDir = hrp.CFrame.RightVector * (math.random() > 0.5 and 1 or -1)
+        awayDir = hrp.CFrame.LookVector
     end
-    -- Add slight random jitter
-    dodgeDir = (dodgeDir + Vector3.new(math.random(-2,2)/10, 0, math.random(-2,2)/10)).Unit
+    -- Add random sidestep
+    awayDir = (awayDir + hrp.CFrame.RightVector * (math.random() > 0.5 and 0.4 or -0.4)).Unit
 
-    local original = hrp.CFrame
-    hrp.CFrame = hrp.CFrame + dodgeDir * 1.2  -- further nudge away
-    task.delay(0.15, function() if hrp and hrp.Parent then pcall(function() hrp.CFrame = original end) end end)
+    -- METHOD 1: Instant WalkSpeed spike + Move input (server-accepted movement)
+    local originalSpeed = hum.WalkSpeed
+    hum.WalkSpeed = 50  -- fast but not impossibly fast
+    hum:Move(awayDir, true)  -- simulates human input, server accepts this
+
+    -- METHOD 2: Send jump input to break grounded combos
+    pcall(function()
+        VIM:SendKeyEvent(true, Enum.KeyCode.Space, false, nil)
+        task.wait(0.04)
+        VIM:SendKeyEvent(false, Enum.KeyCode.Space, false, nil)
+    end)
+
+    -- Restore speed after 0.6s
+    task.delay(0.6, function()
+        if hum and hum.Parent then
+            hum.WalkSpeed = _G.abaSpeedEnabled and SPEED or originalSpeed
+        end
+    end)
+end
+
+-- ============================================================
+-- AUTO BLOCK — tap F when comboed
+-- ============================================================
+local lastAutoBlock = 0
+local function autoBlock()
+    if not _G.abaAutoBlockEnabled then return end
+    local now = os.clock()
+    if now - lastAutoBlock < 0.5 then return end
+    lastAutoBlock = now
+    pcall(function()
+        VIM:SendKeyEvent(true, Enum.KeyCode.F, false, nil)
+        task.wait(0.05)
+        VIM:SendKeyEvent(false, Enum.KeyCode.F, false, nil)
+    end)
+end
+
+-- ============================================================
+-- HITBOX DODGE — side dash via real input (Dash key or double-tap)
+-- ============================================================
+local lastHitboxDodge = 0
+local function hitboxDodge(hrp, hum)
+    if not _G.abaHitboxDodgeEnabled then return end
+    if not hrp or not hum then return end
+    local now = os.clock()
+    if now - lastHitboxDodge < 0.6 then return end
+    lastHitboxDodge = now
+
+    -- Quick directional movement + dash
+    local dodgeDir = hrp.CFrame.RightVector * (math.random() > 0.5 and 1 or -1)
+    local oldSpeed = hum.WalkSpeed
+    hum.WalkSpeed = 40
+    hum:Move(dodgeDir, true)
+
+    -- Try ABA's built-in dash if it exists
+    pcall(function()
+        VIM:SendKeyEvent(true, Enum.KeyCode.Q, false, nil)  -- Q is commonly dash
+        task.wait(0.03)
+        VIM:SendKeyEvent(false, Enum.KeyCode.Q, false, nil)
+    end)
+
+    task.delay(0.4, function()
+        if hum and hum.Parent then
+            hum.WalkSpeed = _G.abaSpeedEnabled and SPEED or oldSpeed
+        end
+    end)
 end
 
 -- ============================================================
@@ -244,9 +245,9 @@ local function checkAndRecoverStun(hum, hrp)
             end
         end
         if wasStunned and _G.comboHits and _G.comboHits >= 2 then
-            if _G.abaComboEscapeEnabled then triggerDesyncSlide(hrp, _G.comboHits >= 4 and 3 or 2) end
+            if _G.abaComboEscapeEnabled then triggerComboEscape(hrp, hum) end
             if _G.abaAutoBlockEnabled then autoBlock() end
-            if _G.abaHitboxDodgeEnabled then hitboxDodge(hrp) end
+            if _G.abaHitboxDodgeEnabled then hitboxDodge(hrp, hum) end
             _G.comboHits = 0
         end
     end
@@ -278,16 +279,20 @@ local function setupStunBypass()
         end
     end))
 
+    -- Immediately react on damage (per-frame check)
     local lastHealth = hum.Health
     table.insert(charConns, hum.HealthChanged:Connect(function(health)
         if health < lastHealth then
             local now = os.clock()
-            _G.comboHits = (now - (_G.lastDamageTime or 0) < 1.5) and ((_G.comboHits or 0) + 1) or 1
+            _G.comboHits = (now - (_G.lastDamageTime or 0) < 1.2) and ((_G.comboHits or 0) + 1) or 1
             _G.lastDamageTime = now
-            if not _G.stunReleaseTime or now > _G.stunReleaseTime then _G.stunReleaseTime = now + (math.random(15,25)/100) end
+            if not _G.stunReleaseTime or now > _G.stunReleaseTime then _G.stunReleaseTime = now + (math.random(12,20)/100) end
+
+            -- IMMEDIATE escape on combo hit #2+
             if _G.comboHits >= 2 then
-                if _G.abaComboEscapeEnabled then triggerDesyncSlide(hrp, 2) end
-                if _G.abaHitboxDodgeEnabled then hitboxDodge(hrp) end
+                triggerComboEscape(hrp, hum)
+                autoBlock()
+                hitboxDodge(hrp, hum)
             end
         end
         lastHealth = health
